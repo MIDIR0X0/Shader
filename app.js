@@ -58,11 +58,11 @@ root.innerHTML = `
             <div class="lab-mode-grid" role="group" aria-label="参考图模式">
                 <button class="lab-mode-btn" type="button" data-mode="soft" aria-pressed="false"><span>光影色彩</span><small>保留底色与自然过渡</small></button>
                 <button class="lab-mode-btn" type="button" data-mode="value" aria-pressed="false"><span>纯明度图</span><small>排除色相干扰</small></button>
-                <button class="lab-mode-btn active" type="button" data-mode="bands" aria-pressed="true"><span>明暗色块</span><small>直接照着分区上色</small></button>
+                <button class="lab-mode-btn" type="button" data-mode="bands" aria-pressed="false"><span>明暗色块</span><small>直接照着分区上色</small></button>
                 <button class="lab-mode-btn" type="button" data-mode="contour" aria-pressed="false"><span>色块边界</span><small>强调明暗交界线</small></button>
-                <button class="lab-mode-btn lab-mode-btn-wide" type="button" data-mode="prep" aria-pressed="false"><span>预明暗施工图</span><small>把理想光影压缩成实际可画的三个阶段</small></button>
+                <button class="lab-mode-btn lab-mode-btn-wide active" type="button" data-mode="prep" aria-pressed="true"><span>预明暗施工图</span><small>把理想光影压缩成实际可画的三个阶段</small></button>
             </div>
-            <div id="labPrepPanel" class="lab-prep-panel" hidden>
+            <div id="labPrepPanel" class="lab-prep-panel">
                 <div class="lab-prep-options">
                     <label for="labPrepPreset"><span>灰阶预设</span><select id="labPrepPreset">
                         <option value="gray">灰底预明暗</option>
@@ -110,7 +110,7 @@ root.innerHTML = `
     </aside>
 
     <main class="lab-workspace">
-        <div class="lab-topbar"><span id="labViewBadge" class="lab-badge">明暗色块 · 5 阶</span><span id="labStatus" class="lab-status" role="status" aria-live="polite">等待上传</span></div>
+        <div class="lab-topbar"><span id="labViewBadge" class="lab-badge">预明暗施工图 · 边缘点亮</span><span id="labStatus" class="lab-status" role="status" aria-live="polite">等待上传</span></div>
         <div class="lab-stage">
             <div id="labEmpty" class="lab-empty"><div class="lab-empty-mark">◐</div><h2>从一张清晰的模型照片开始</h2><p>最好使用灰模、纯色底漆或底色接近的照片。尽量让模型占据画面主体，并避免强烈的原始投影与杂乱背景。</p></div>
             <div id="labCanvasShell" class="lab-canvas-shell"><canvas id="labView" aria-label="光影参考预览"></canvas><div id="labCompareLine" class="lab-compare-line"></div></div>
@@ -145,7 +145,7 @@ const maskCanvas = document.createElement("canvas");
 let cachedPreviewMaskPixels = null;
 const viewCtx = ui.view.getContext("2d", { alpha: false });
 const state = {
-    image: null, fileName: "miniature", surface: null, mode: "bands",
+    image: null, fileName: "miniature", surface: null, mode: "prep",
     lightX: -0.5, lightY: -0.55, lightDragging: false, compareDragging: false,
     maskMode: false, maskAction: "remove", maskDragging: false, maskLastPoint: null,
     prepStep: 2, cropTimer: 0, renderFrame: 0, buildToken: 0
@@ -176,7 +176,30 @@ function smoothstep(edge0, edge1, value) {
     return amount * amount * (3 - 2 * amount);
 }
 
-function prepPixel(guideValue, localRise, technique, prepStep, prepPalette, lightRange = .45) {
+function prepHighlightRange(values, maskPixels = null) {
+    const histogram = new Uint32Array(256);
+    let count = 0;
+    for (let i = 0, p = 0; i < values.length; i++, p += 4) {
+        if (maskPixels && maskPixels[p] < 128) continue;
+        histogram[Math.round(clamp(values[i]) * 255)]++;
+        count++;
+    }
+    if (!count) return [.7, 1];
+    const quantile = fraction => {
+        const target = count * fraction;
+        let seen = 0;
+        for (let bin = 0; bin < histogram.length; bin++) {
+            seen += histogram[bin];
+            if (seen >= target) return bin / 255;
+        }
+        return 1;
+    };
+    const low = quantile(.7);
+    const high = quantile(.98);
+    return high - low >= .04 ? [low, high] : [Math.max(0, high - .08), high];
+}
+
+function prepPixel(guideValue, localRise, technique, prepStep, prepPalette, lightRange = .45, highlightGuide = guideValue) {
     const guide = clamp(guideValue);
     const makePaintable = coverage => technique === "hand"
         ? smoothstep(.12, .88, coverage)
@@ -184,8 +207,8 @@ function prepPixel(guideValue, localRise, technique, prepStep, prepPalette, ligh
     const range = clamp((lightRange - .2) / .6);
     const mainStart = .58 - range * .2;
     const mainEnd = .85 - range * .1;
-    const edgeStart = .88 - range * .18;
-    const edgeEnd = .99 - range * .05;
+    const edgeStart = .62 - range * .22;
+    const edgeEnd = .96 - range * .14;
     let red = prepPalette[2][0], green = prepPalette[2][1], blue = prepPalette[2][2];
     if (prepStep >= 0) {
         const shadowCoverage = makePaintable(1 - smoothstep(.3, .59, guide));
@@ -205,7 +228,7 @@ function prepPixel(guideValue, localRise, technique, prepStep, prepPalette, ligh
         blue += (prepPalette[3][2] - blue) * lightCoverage;
     }
     if (prepStep >= 2) {
-        let edgeCoverage = makePaintable(smoothstep(edgeStart, edgeEnd, guide));
+        let edgeCoverage = makePaintable(smoothstep(edgeStart, edgeEnd, highlightGuide));
         if (technique === "hand") edgeCoverage *= .28 + localRise * .48;
         if (technique === "dry") edgeCoverage *= .18 + localRise * .82;
         red += (prepPalette[4][0] - red) * edgeCoverage;
@@ -572,6 +595,7 @@ function lightingValues(surface) {
 
 function renderSurface(surface, targetCanvas, maskPixels = null) {
     const values = lightingValues(surface);
+    const highlightRange = state.mode === "prep" ? prepHighlightRange(values, maskPixels) : null;
     const output = new ImageData(surface.width, surface.height);
     const out = output.data;
     const src = surface.imageData.data;
@@ -598,9 +622,10 @@ function renderSurface(surface, targetCanvas, maskPixels = null) {
             out[p] = gray; out[p + 1] = gray; out[p + 2] = gray;
         } else if (state.mode === "prep") {
             const localRise = clamp(.5 + (surface.luminance[i] - surface.blurred[i]) * 7);
+            const highlightGuide = clamp((values[i] - highlightRange[0]) / Math.max(.04, highlightRange[1] - highlightRange[0]));
             // Keep the resolved form detail intact. Paintability comes from the
             // limited coverage bands in prepPixel, not from blurring the model.
-            const color = prepPixel(values[i], localRise, ui.prepTechnique.value, state.prepStep, prepPalette, Number(ui.prepRange.value) / 100);
+            const color = prepPixel(values[i], localRise, ui.prepTechnique.value, state.prepStep, prepPalette, Number(ui.prepRange.value) / 100, highlightGuide);
             out[p] = color[0]; out[p + 1] = color[1]; out[p + 2] = color[2];
         } else {
             const stepped = levelMap ? levelMap[i] / (levels - 1) : values[i];
