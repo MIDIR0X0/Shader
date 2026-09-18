@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>Miniature Light Lab</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #151515;
+        color: #eee;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    .app {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        height: 100vh;
+    }
+
+    .sidebar {
+        background: #202020;
+        padding: 20px;
+        overflow-y: auto;
+        border-right: 1px solid #333;
+    }
+
+    h1 {
+        font-size: 20px;
+        margin-top: 0;
+    }
+
+    .section {
+        margin-bottom: 24px;
+    }
+
+    .section-title {
+        font-size: 12px;
+        color: #999;
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    input[type="file"] {
+        width: 100%;
+    }
+
+    .control {
+        margin-bottom: 14px;
+    }
+
+    .control label {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 6px;
+    }
+
+    input[type="range"] {
+        width: 100%;
+    }
+
+    .mode-row {
+        display: flex;
+        gap: 6px;
+    }
+
+    .mode-btn {
+        flex: 1;
+        padding: 9px 5px;
+        border: none;
+        background: #343434;
+        color: white;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+
+    .mode-btn.active {
+        background: #777;
+    }
+
+    button {
+        cursor: pointer;
+    }
+
+    .export-btn {
+        width: 100%;
+        padding: 12px;
+        background: #efefef;
+        color: #111;
+        border: none;
+        border-radius: 6px;
+        font-weight: bold;
+    }
+
+    .viewer {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background:
+            radial-gradient(circle at center, #292929, #101010);
+    }
+
+    canvas#view {
+        max-width: 95%;
+        max-height: 95%;
+        box-shadow: 0 10px 50px rgba(0,0,0,.5);
+    }
+
+    .empty {
+        position: absolute;
+        color: #777;
+        font-size: 18px;
+        pointer-events: none;
+    }
+
+    .light-pad {
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        background:
+            radial-gradient(circle, #444 2px, transparent 3px),
+            #292929;
+        border: 1px solid #555;
+        position: relative;
+        margin: auto;
+        touch-action: none;
+        cursor: crosshair;
+    }
+
+    .light-pad::before,
+    .light-pad::after {
+        content: "";
+        position: absolute;
+        background: #444;
+    }
+
+    .light-pad::before {
+        width: 1px;
+        height: 100%;
+        left: 50%;
+    }
+
+    .light-pad::after {
+        height: 1px;
+        width: 100%;
+        top: 50%;
+    }
+
+    .light-dot {
+        width: 20px;
+        height: 20px;
+        background: #fff;
+        border-radius: 50%;
+        position: absolute;
+        transform: translate(-50%, -50%);
+        box-shadow: 0 0 15px white;
+        pointer-events: none;
+    }
+
+    .small {
+        font-size: 11px;
+        color: #888;
+        margin-top: 8px;
+        line-height: 1.45;
+    }
+</style>
+<link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+<!-- Legacy v1 retained temporarily as a rollback snapshot while v2 is under user acceptance.
+
+<div class="app">
+
+    <aside class="sidebar">
+
+        <h1>Miniature Light Painter</h1>
+
+        <div class="section">
+            <div class="section-title">Model Photo</div>
+            <input id="upload" type="file" accept="image/*">
+        </div>
+
+        <div class="section">
+
+            <div class="section-title">Light Direction</div>
+
+            <div id="lightPad" class="light-pad">
+                <div id="lightDot" class="light-dot"></div>
+            </div>
+
+            <div class="small">
+                拖动白点改变主光方向
+            </div>
+
+        </div>
+
+        <div class="section">
+
+            <div class="control">
+                <label>
+                    Light Strength
+                    <span id="strengthValue">75</span>
+                </label>
+                <input id="strength" type="range"
+                       min="0" max="100" value="75">
+            </div>
+
+            <div class="control">
+                <label>
+                    Contrast
+                    <span id="contrastValue">70</span>
+                </label>
+                <input id="contrast" type="range"
+                       min="0" max="100" value="70">
+            </div>
+
+            <div class="control">
+                <label>
+                    Shadow Balance
+                    <span id="balanceValue">50</span>
+                </label>
+                <input id="balance" type="range"
+                       min="0" max="100" value="50">
+            </div>
+
+            <div class="control">
+                <label>
+                    Banding
+                    <span id="bandValue">55</span>
+                </label>
+                <input id="banding" type="range"
+                       min="0" max="100" value="55">
+            </div>
+
+            <div class="control">
+                <label>
+                    Surface Strength
+                    <span id="surfaceValue">55</span>
+                </label>
+                <input id="surface" type="range"
+                       min="0" max="100" value="55">
+            </div>
+
+        </div>
+
+        <div class="section">
+
+            <div class="section-title">Painting Style</div>
+
+            <div class="mode-row">
+                <button class="mode-btn" data-mode="soft">
+                    Soft
+                </button>
+
+                <button class="mode-btn active"
+                        data-mode="painterly">
+                    Painterly
+                </button>
+
+                <button class="mode-btn"
+                        data-mode="cel">
+                    Cel
+                </button>
+            </div>
+
+        </div>
+
+        <div class="section">
+
+            <div class="control">
+                <label>
+                    Original / Reference
+                    <span id="compareValue">0</span>
+                </label>
+
+                <input id="compare"
+                       type="range"
+                       min="0"
+                       max="100"
+                       value="0">
+            </div>
+
+            <div class="small">
+                0 = 全部参考图<br>
+                100 = 全部原图
+            </div>
+
+        </div>
+
+        <button id="exportBtn" class="export-btn">
+            Export Reference
+        </button>
+
+    </aside>
+
+    <main class="viewer">
+
+        <div id="empty" class="empty">
+            上传一张微缩模型照片
+        </div>
+
+        <canvas id="view"></canvas>
+
+    </main>
+
+</div>
+
+<script>
+
+const upload = document.getElementById("upload");
+
+const view = document.getElementById("view");
+const ctx = view.getContext("2d");
+
+const sourceCanvas = document.createElement("canvas");
+const sourceCtx = sourceCanvas.getContext("2d");
+
+const resultCanvas = document.createElement("canvas");
+const resultCtx = resultCanvas.getContext("2d");
+
+let sourceImageData = null;
+let currentMode = "painterly";
+
+let lightX = -0.55;
+let lightY = -0.55;
+
+const controls = {
+    strength: document.getElementById("strength"),
+    contrast: document.getElementById("contrast"),
+    balance: document.getElementById("balance"),
+    banding: document.getElementById("banding"),
+    surface: document.getElementById("surface"),
+    compare: document.getElementById("compare")
+};
+
+const values = {
+    strength: document.getElementById("strengthValue"),
+    contrast: document.getElementById("contrastValue"),
+    balance: document.getElementById("balanceValue"),
+    banding: document.getElementById("bandValue"),
+    surface: document.getElementById("surfaceValue"),
+    compare: document.getElementById("compareValue")
+};
+
+function clamp(v, min = 0, max = 1) {
+    return Math.min(max, Math.max(min, v));
+}
+
+function luminance(r, g, b) {
+    return (
+        r * 0.2126 +
+        g * 0.7152 +
+        b * 0.0722
+    ) / 255;
+}
+
+upload.addEventListener("change", e => {
+
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    const img = new Image();
+
+    img.onload = () => {
+
+        const maxSize = 1000;
+
+        let w = img.width;
+        let h = img.height;
+
+        if (Math.max(w, h) > maxSize) {
+
+            const scale = maxSize / Math.max(w, h);
+
+            w *= scale;
+            h *= scale;
+        }
+
+        w = Math.round(w);
+        h = Math.round(h);
+
+        sourceCanvas.width = w;
+        sourceCanvas.height = h;
+
+        resultCanvas.width = w;
+        resultCanvas.height = h;
+
+        view.width = w;
+        view.height = h;
+
+        sourceCtx.drawImage(img, 0, 0, w, h);
+
+        sourceImageData =
+            sourceCtx.getImageData(0, 0, w, h);
+
+        document.getElementById("empty").style.display = "none";
+
+        render();
+    };
+
+    img.src = URL.createObjectURL(file);
+});
+
+function render() {
+
+    if (!sourceImageData) return;
+
+    const width = sourceImageData.width;
+    const height = sourceImageData.height;
+
+    const src = sourceImageData.data;
+
+    const output =
+        new ImageData(width, height);
+
+    const out = output.data;
+
+    const surfaceStrength =
+        Number(controls.surface.value) / 100 * 7;
+
+    const lightStrength =
+        Number(controls.strength.value) / 100;
+
+    const contrast =
+        Number(controls.contrast.value) / 100;
+
+    const balance =
+        (Number(controls.balance.value) - 50) / 50;
+
+    const banding =
+        Number(controls.banding.value) / 100;
+
+    // light vector
+
+    let lx = lightX;
+    let ly = lightY;
+
+    let horizontalLength =
+        Math.sqrt(lx * lx + ly * ly);
+
+    if (horizontalLength > 1) {
+
+        lx /= horizontalLength;
+        ly /= horizontalLength;
+
+        horizontalLength = 1;
+    }
+
+    const lz =
+        Math.sqrt(
+            Math.max(
+                0.05,
+                1 - horizontalLength * horizontalLength
+            )
+        );
+
+    const lightLength =
+        Math.sqrt(lx*lx + ly*ly + lz*lz);
+
+    lx /= lightLength;
+    ly /= lightLength;
+
+    const normalizedLz =
+        lz / lightLength;
+
+    function getLum(x, y) {
+
+        x = Math.max(0, Math.min(width - 1, x));
+        y = Math.max(0, Math.min(height - 1, y));
+
+        const i = (y * width + x) * 4;
+
+        return luminance(
+            src[i],
+            src[i+1],
+            src[i+2]
+        );
+    }
+
+    for (let y = 0; y < height; y++) {
+
+        for (let x = 0; x < width; x++) {
+
+            const i = (y * width + x) * 4;
+
+            // Rough pseudo height normal estimation.
+
+            const left  = getLum(x - 1, y);
+            const right = getLum(x + 1, y);
+
+            const top    = getLum(x, y - 1);
+            const bottom = getLum(x, y + 1);
+
+            const gx =
+                (right - left) * surfaceStrength;
+
+            const gy =
+                (bottom - top) * surfaceStrength;
+
+            let nx = -gx;
+            let ny = -gy;
+            let nz = 1;
+
+            const nl =
+                Math.sqrt(nx*nx + ny*ny + nz*nz);
+
+            nx /= nl;
+            ny /= nl;
+            nz /= nl;
+
+            let lighting =
+                nx * lx +
+                ny * ly +
+                nz * normalizedLz;
+
+            lighting =
+                clamp(
+                    lighting * 0.5 + 0.5
+                );
+
+            // Shadow balance
+
+            lighting += balance * 0.2;
+
+            lighting = clamp(lighting);
+
+            // Increased painting contrast
+
+            lighting =
+                0.5 +
+                (lighting - 0.5) *
+                (1 + contrast * 2.2);
+
+            lighting = clamp(lighting);
+
+            let styled = lighting;
+
+            if (currentMode === "soft") {
+
+                styled =
+                    Math.pow(styled, 0.9);
+
+            }
+
+            if (currentMode === "painterly") {
+
+                const levels =
+                    Math.round(
+                        7 - banding * 3
+                    );
+
+                const quantized =
+                    Math.round(
+                        styled * (levels - 1)
+                    ) /
+                    (levels - 1);
+
+                styled =
+                    styled * (1 - banding * 0.6) +
+                    quantized * banding * 0.6;
+            }
+
+            if (currentMode === "cel") {
+
+                let levels =
+                    Math.round(
+                        5 - banding * 2
+                    );
+
+                levels =
+                    Math.max(3, levels);
+
+                styled =
+                    Math.round(
+                        styled * (levels - 1)
+                    ) /
+                    (levels - 1);
+            }
+
+            // Push lighting beyond realistic range.
+
+            let lightFactor =
+                0.28 +
+                styled * 1.15;
+
+            lightFactor =
+                1 +
+                (lightFactor - 1) *
+                lightStrength;
+
+            const r = src[i];
+            const g = src[i+1];
+            const b = src[i+2];
+
+            // Slight saturation boost for painted appearance.
+
+            const lum =
+                r * 0.2126 +
+                g * 0.7152 +
+                b * 0.0722;
+
+            const saturationBoost =
+                currentMode === "soft"
+                ? 1
+                : 1.08;
+
+            let rr =
+                lum +
+                (r - lum) * saturationBoost;
+
+            let gg =
+                lum +
+                (g - lum) * saturationBoost;
+
+            let bb =
+                lum +
+                (b - lum) * saturationBoost;
+
+            out[i] =
+                clamp(
+                    rr * lightFactor,
+                    0,
+                    255
+                );
+
+            out[i+1] =
+                clamp(
+                    gg * lightFactor,
+                    0,
+                    255
+                );
+
+            out[i+2] =
+                clamp(
+                    bb * lightFactor,
+                    0,
+                    255
+                );
+
+            out[i+3] = src[i+3];
+        }
+    }
+
+    resultCtx.putImageData(output, 0, 0);
+
+    drawComparison();
+}
+
+function drawComparison() {
+
+    if (!sourceImageData) return;
+
+    const compare =
+        Number(controls.compare.value) / 100;
+
+    ctx.clearRect(
+        0,
+        0,
+        view.width,
+        view.height
+    );
+
+    ctx.drawImage(
+        resultCanvas,
+        0,
+        0
+    );
+
+    if (compare > 0) {
+
+        const split =
+            view.width * compare;
+
+        ctx.save();
+
+        ctx.beginPath();
+
+        ctx.rect(
+            0,
+            0,
+            split,
+            view.height
+        );
+
+        ctx.clip();
+
+        ctx.drawImage(
+            sourceCanvas,
+            0,
+            0
+        );
+
+        ctx.restore();
+
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(split, 0);
+        ctx.lineTo(split, view.height);
+        ctx.stroke();
+    }
+}
+
+Object.entries(controls).forEach(
+    ([name, control]) => {
+
+        control.addEventListener(
+            "input",
+            () => {
+
+                if (values[name]) {
+                    values[name].textContent =
+                        control.value;
+                }
+
+                if (name === "compare") {
+                    drawComparison();
+                } else {
+                    render();
+                }
+
+            }
+        );
+    }
+);
+
+// Painting modes
+
+document
+.querySelectorAll(".mode-btn")
+.forEach(button => {
+
+    button.addEventListener(
+        "click",
+        () => {
+
+            document
+            .querySelectorAll(".mode-btn")
+            .forEach(btn =>
+                btn.classList.remove("active")
+            );
+
+            button.classList.add("active");
+
+            currentMode =
+                button.dataset.mode;
+
+            render();
+        }
+    );
+});
+
+// Light pad
+
+const pad =
+    document.getElementById("lightPad");
+
+const dot =
+    document.getElementById("lightDot");
+
+function updateLightDot() {
+
+    const rect =
+        pad.getBoundingClientRect();
+
+    const radius =
+        rect.width / 2;
+
+    dot.style.left =
+        (radius + lightX * radius) + "px";
+
+    dot.style.top =
+        (radius + lightY * radius) + "px";
+}
+
+function setLightFromPointer(e) {
+
+    const rect =
+        pad.getBoundingClientRect();
+
+    const cx =
+        rect.left + rect.width / 2;
+
+    const cy =
+        rect.top + rect.height / 2;
+
+    let x =
+        (e.clientX - cx) /
+        (rect.width / 2);
+
+    let y =
+        (e.clientY - cy) /
+        (rect.height / 2);
+
+    const len =
+        Math.sqrt(x*x + y*y);
+
+    if (len > 0.95) {
+
+        x =
+            x / len * 0.95;
+
+        y =
+            y / len * 0.95;
+    }
+
+    lightX = x;
+    lightY = y;
+
+    updateLightDot();
+
+    render();
+}
+
+let draggingLight = false;
+
+pad.addEventListener(
+    "pointerdown",
+    e => {
+
+        draggingLight = true;
+
+        pad.setPointerCapture(
+            e.pointerId
+        );
+
+        setLightFromPointer(e);
+    }
+);
+
+pad.addEventListener(
+    "pointermove",
+    e => {
+
+        if (!draggingLight)
+            return;
+
+        setLightFromPointer(e);
+    }
+);
+
+pad.addEventListener(
+    "pointerup",
+    () => {
+
+        draggingLight = false;
+    }
+);
+
+// Export
+
+document
+.getElementById("exportBtn")
+.addEventListener(
+    "click",
+    () => {
+
+        if (!sourceImageData)
+            return;
+
+        const link =
+            document.createElement("a");
+
+        link.download =
+            "miniature-light-reference.png";
+
+        link.href =
+            resultCanvas.toDataURL(
+                "image/png"
+            );
+
+        link.click();
+    }
+);
+
+updateLightDot();
+
+</script>
+
+-->
+
+<div id="labRoot"></div>
+<script src="data/paints.js"></script>
+<script src="app.js"></script>
+
+</body>
+</html>
